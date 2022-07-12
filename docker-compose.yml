@@ -1,0 +1,17 @@
+version: '3.7'
+services:
+  jupyter:
+    container_name: glue_jupyter
+    environment:
+      - DISABLE_SSL=true
+    entrypoint : /home/glue_user/jupyter/jupyter_start.sh
+    image: amazon/aws-glue-libs:glue_libs_2.0.0_image_01
+    ports:
+      - '4040:4040'
+      - '18080:18080'
+      - '8998:8998'
+      - '8888:8888'
+    restart: always
+    volumes:
+      - C:\Glue2\glue2\credential:/home/glue_user/.aws
+      - C:\Glue2\glue2\workspace\notebooks:/home/glue_user/workspace/jupyter_workspace/
