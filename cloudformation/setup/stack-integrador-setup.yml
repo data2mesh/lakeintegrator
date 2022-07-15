@@ -1,0 +1,112 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Template de Setup
+Parameters:
+  Grupo:
+      Type: String
+      Description: 'Grupo de proyecto'
+      AllowedValues:
+      - Auna
+      Default: Auna
+  AppEnv:
+    Type: String
+    Description: 'application environment (lowercase only), ex: dev, qas, prd'
+    AllowedValues:
+      - prd
+      - qas
+      - dev
+    Default: dev
+  Env:
+    Type: String
+    Description: 'application environment (uppercase only), ex: DEV, QAS, PRD'
+    AllowedValues:
+      - PRD
+      - QAS
+      - DEV
+    Default: DEV
+  ProjectName:
+    Type: String
+    Description: Projects's name that will be used on Resources (lower case)
+    Default: auna
+  BucketLanding:
+      Type: String
+      Description: 'bucket landing'
+      Default: auna-lake-landing
+  BucketArtifacts:
+      Type: String
+      Description: 'bucket artifacts'
+      Default: auna-lake-artifacts
+  BucketRaw:
+      Type: String
+      Description: 'bucket raw'
+      Default: auna-lake-raw
+Resources:
+  IAMResource:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub role-producer-${ProjectName}-${AppEnv}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ecs-tasks.amazonaws.com
+            - lambda.amazonaws.com
+            - states.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: !Sub policy-producer-${ProjectName}-${AppEnv}
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            - s3:ListBucket
+            - s3:PutObject
+            - s3:DeleteObject
+            - s3:GetBucketNotification
+            - s3:PutBucketNotification
+            Resource:
+            - !Sub arn:aws:s3:::${BucketLanding}
+            - !Sub arn:aws:s3:::${BucketLanding}/*
+            - !Sub arn:aws:s3:::${BucketArtifacts}
+            - !Sub arn:aws:s3:::${BucketArtifacts}/*
+            - !Sub arn:aws:s3:::${BucketRaw}
+            - !Sub arn:aws:s3:::${BucketRaw}/*
+          - Effect: Allow
+            Action:
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource:
+            - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/lambda-integrator-producer-${AppEnv}:*
+            - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/states/sf-lake-integrador-${AppEnv}:*
+          - Effect: Allow
+            Action: states:*
+            Resource:
+              Fn::Sub: arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:sf-lake-integrador-${AppEnv}
+          - Effect: Allow
+            Action:
+            - sns:Publish
+            - sns:GetTopicAttributes
+            - sns:List*
+            Resource:
+            - Fn::Sub: arn:aws:sns:${AWS::Region}:${AWS::AccountId}:sns-integrator-notify-alert-${AppEnv}           
+  LogGroupEvents:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: 'Delete'
+    Properties:
+      LogGroupName: !Sub /aws/lambda/lambda-integrator-producer-${AppEnv}
+      RetentionInDays: 30
+  TopicRes:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName:
+        Fn::Sub: sns-integrator-notify-alert-${AppEnv}
+      DisplayName:
+        Fn::Sub: sns-integrator-notify-alert-${AppEnv}
+      Tags:
+        - Key: Grupo
+          Value: !Ref Grupo

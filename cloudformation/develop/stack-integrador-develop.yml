@@ -1,0 +1,151 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Lambda Resources for Integrator
+Parameters:
+  Grupo:
+      Type: String
+      Description: 'Grupo de proyecto'
+      AllowedValues:
+      - Auna
+      Default: Auna
+  Env:
+      Type: String
+      Description: 'environment (uppercase only), ex: DEV, QAS, PRD'
+      AllowedValues:
+      - DEV
+      - QAS
+      - PRD
+      Default: DEV
+  AppEnv:
+      Type: String
+      Description: 'application environment (lowercase only), ex: dev, qas, prd'
+      AllowedValues:
+      - dev
+      - qas
+      - prd
+      Default: dev
+  ProjectName:
+    Type: String
+    Description: Projects's name that will be used on Resources (lower case)
+    Default: auna      
+  BucketArtifacts:
+      Type: String
+      Description: 'bucket artifacts'
+      Default: auna-lake-artifacts
+  BucketLanding:
+      Type: String
+      Description: 'bucket landing'
+      Default: auna-lake-landing
+  BucketRaw:
+      Type: String
+      Description: 'bucket raw'
+      Default: auna-lake-raw
+Resources:
+  IntegratorLambda:
+      Type: AWS::Lambda::Function
+      Properties:
+          FunctionName: !Sub lambda-integrator-producer-${AppEnv}
+          Environment:
+            Variables:
+              BUCKET_ARTIFACTS: !Ref BucketArtifacts
+              KEY_ARTIFACTS: config-sources.json
+              BUCKET_MOVE: !Sub ${BucketLanding}
+              KEY_MOVE: move/
+              BUCKET_RAW: !Sub ${BucketRaw}-{Env}
+          Handler: lambda_function.lambda_handler
+          Role: !Sub arn:aws:iam::${AWS::AccountId}:role/role-producer-${ProjectName}-${AppEnv}
+          Runtime: python3.8
+          Code:
+              S3Bucket: !Ref BucketArtifacts
+              S3Key: lambdas/lambda-integrator-producer.zip
+          Timeout: 300
+          MemorySize: 256
+  CustomResourceLambdaFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: index.lambda_handler
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/role-producer-${ProjectName}-${AppEnv}
+      Code:
+        ZipFile: |
+            from __future__ import print_function
+            import json
+            import boto3
+            import cfnresponse
+            
+            SUCCESS = "SUCCESS"
+            FAILED = "FAILED"
+            
+            print('Loading function')
+            s3 = boto3.resource('s3')
+            
+            def lambda_handler(event, context):
+                print("Received event: " + json.dumps(event, indent=2))
+                responseData={}
+                try:
+                    if event['RequestType'] == 'Delete':
+                        print("Request Type:",event['RequestType'])
+                        Bucket=event['ResourceProperties']['Bucket']
+                        delete_notification(Bucket)
+                        print("Sending response to custom resource after Delete")
+                    elif event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
+                        print("Request Type:",event['RequestType'])
+                        LambdaArn=event['ResourceProperties']['LambdaArn']
+                        Bucket=event['ResourceProperties']['Bucket']
+                        add_notification(LambdaArn, Bucket)
+                        responseData={'Bucket':Bucket}
+                        print("Sending response to custom resource")
+                    responseStatus = 'SUCCESS'
+                except Exception as e:
+                    print('Failed to process:', e)
+                    responseStatus = 'FAILED'
+                    responseData = {'Failure': 'Something bad happened.'}
+                cfnresponse.send(event, context, responseStatus, responseData)
+
+            def add_notification(LambdaArn, Bucket):
+                bucket_notification = s3.BucketNotification(Bucket)
+                response = bucket_notification.put(
+                  NotificationConfiguration={
+                    'LambdaFunctionConfigurations': [
+                      {
+                          'LambdaFunctionArn': LambdaArn,
+                          'Events': [
+                              's3:ObjectCreated:Put'
+                          ],
+                          'Filter':{
+                            'Key': {
+                              'FilterRules':[
+                                {'Name':'prefix',
+                                'Value': 'input/'},
+                                {'Name':'suffix',
+                                'Value': 'csv'}
+                              ]
+                            }
+                          } 
+                      }
+                    ]
+                  }
+                )
+                print("Put request completed....")
+              
+            def delete_notification(Bucket):
+                bucket_notification = s3.BucketNotification(Bucket)
+                response = bucket_notification.put(
+                    NotificationConfiguration={}
+                )
+                print("Delete request completed....")
+      Runtime: python3.6
+      Timeout: 50
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref IntegratorLambda
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref "AWS::AccountId"
+      SourceArn: !Sub "arn:aws:s3:::${BucketLanding}"
+  LambdaTrigger:
+    Type: 'Custom::LambdaTrigger'
+    DependsOn: LambdaInvokePermission
+    Properties:
+      ServiceToken: !GetAtt CustomResourceLambdaFunction.Arn
+      LambdaArn: !GetAtt IntegratorLambda.Arn
+      Bucket: !Ref BucketLanding

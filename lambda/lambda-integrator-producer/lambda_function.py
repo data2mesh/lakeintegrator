@@ -6,7 +6,7 @@ from utils.validate import validate_key
 from utils.generate_token import generate_token
 import random
 
-
+    
 def lambda_handler(event, context):
     print(f'S3 Evento:  {event}')
 

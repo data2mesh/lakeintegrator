@@ -1,0 +1,111 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS Step Functions for the Orchestrator
+Parameters:
+  AppEnv:
+    Default: dev
+    Type: String
+    Description: 'environment (lowercase only), ex: dev, qas, prd'
+    AllowedValues:
+      - qas
+      - dev
+      - prd
+  Env:
+    Default: DEV
+    Type: String
+    Description:  'environment (uppercase only), ex: dev, qas, prd'
+    AllowedValues:
+      - QAS
+      - DEV
+      - PRD
+  ProjectName:
+    Type: String
+    Description: Projects's name that will be used on Resources (lower case)
+    Default: auna      
+  BucketArtifacts:
+      Type: String
+      Description: 'bucket artifacts'
+      Default: auna-lake-artifacts
+  BucketLanding:
+      Type: String
+      Description: 'bucket landing'
+      Default: auna-lake-landing
+  BucketRaw:
+      Type: String
+      Description: 'bucket raw'
+      Default: auna-lake-raw
+Resources:
+  StateMachineLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: 'Delete'
+    Properties:
+      LogGroupName: !Sub /aws/states/sf-lake-integrador-${AppEnv}
+      RetentionInDays: 30
+  StateMachineRes:
+    Type: AWS::StepFunctions::StateMachine
+    DeletionPolicy: 'Delete'
+    Properties:
+      StateMachineName: !Sub sf-lake-integrador-${AppEnv}
+      RoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/role-producer-${ProjectName}-${AppEnv}
+      DefinitionString:
+        !Sub |
+        {
+          "Comment": "A description of my state machine",
+          "StartAt": "Glue Job Raw",
+          "States": {
+            "Glue Job Raw": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "JobRawLake",
+                "Arguments": {
+                  "--data$": "$.mdata"
+                }
+              },
+              "Next": "Glue Job Analytics",
+              "Catch": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "Next": "SNS FAILED"
+                }
+              ]
+            },
+            "SNS FAILED": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+              "Parameters": {
+                "TopicArn": "arn:aws:sns:us-east-1:279224823134:sns-integrator-notify-alert-dev",
+                "Message": {
+                  "Message": "Failed F"
+                }
+              },
+              "End": true
+            },
+            "Glue Job Analytics": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun",
+              "Parameters": {
+                "JobName": "JobLakeAnalytic",
+                "Arguments": {
+                  "--data$": "$.mdata"
+                }
+              },
+              "Catch": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "Next": "SNS FAILED"
+                }
+              ],
+              "Next": "Success"
+            },
+            "Success": {
+              "Type": "Succeed"
+            }
+          }
+        }
+Outputs:
+  CloudWatchLogsLogGroup:
+    Value: !GetAtt StateMachineLogGroup.Arn
