@@ -1,9 +1,11 @@
 import json
+from warnings import catch_warnings
 import boto3
 import botocore
 import os
 from utils.validate import validate_key
 from utils.generate_token import generate_token
+from utils.step_function import StepFunctionsManager
 import random
 
     
@@ -61,6 +63,19 @@ def move_raw(copy_source, data_struct):
 
     return data_struct
 
+
+def trigger_stepfunction(data_message, state_machine_arn):
+    client = boto3.client('sf')
+    response = {}
+
+    try:
+        sf_manager = StepFunctionsManager(state_machine_arn)
+        can_trigger_step = can_submit_to_process(
+            sf_manager, body_content[process_type])
+
+    except Exception as e:
+        print('Exception ocurred: {}'.format(e))
+        raise e
 
 def send_message_sqs(data_message, url_queue):
     client = boto3.client('sqs')
