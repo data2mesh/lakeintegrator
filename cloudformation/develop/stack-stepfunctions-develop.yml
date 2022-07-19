@@ -50,15 +50,28 @@ Resources:
         !Sub |
         {
           "Comment": "A description of my state machine",
-          "StartAt": "Glue Job Raw",
+          "StartAt": "Choice",
           "States": {
+            "Choice": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Not": {
+                    "Variable": "$.data",
+                    "IsPresent": true
+                  },
+                  "Next": "SNS FAILED"
+                }
+              ],
+              "Default": "Glue Job Raw"
+            },
             "Glue Job Raw": {
               "Type": "Task",
               "Resource": "arn:aws:states:::glue:startJobRun.sync",
               "Parameters": {
                 "JobName": "JobRawLake",
                 "Arguments": {
-                  "--data$": "$.mdata"
+                  "--data.$": "$.data"
                 }
               },
               "Next": "Glue Job Analytics",
@@ -69,7 +82,8 @@ Resources:
                   ],
                   "Next": "SNS FAILED"
                 }
-              ]
+              ],
+              "ResultPath": "$.glue_job_raw"
             },
             "SNS FAILED": {
               "Type": "Task",
@@ -77,18 +91,21 @@ Resources:
               "Parameters": {
                 "TopicArn": "arn:aws:sns:us-east-1:279224823134:sns-integrator-notify-alert-dev",
                 "Message": {
-                  "Message": "Failed F"
+                  "Message.$": "$.Cause"
                 }
               },
-              "End": true
+              "Next": "Fail"
+            },
+            "Fail": {
+              "Type": "Fail"
             },
             "Glue Job Analytics": {
               "Type": "Task",
-              "Resource": "arn:aws:states:::glue:startJobRun",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
               "Parameters": {
                 "JobName": "JobLakeAnalytic",
                 "Arguments": {
-                  "--data$": "$.mdata"
+                  "--data.$": "$.data"
                 }
               },
               "Catch": [
@@ -99,7 +116,8 @@ Resources:
                   "Next": "SNS FAILED"
                 }
               ],
-              "Next": "Success"
+              "Next": "Success",
+              "ResultPath": "$.glue_job_analytics"
             },
             "Success": {
               "Type": "Succeed"

@@ -1,13 +1,11 @@
 import json
-from warnings import catch_warnings
 import boto3
 import botocore
 import os
 from utils.validate import validate_key
 from utils.generate_token import generate_token
-from utils.step_function import StepFunctionsManager
 import random
-
+from utils.step_function import StepFunctionsManager
     
 def lambda_handler(event, context):
     print(f'S3 Evento:  {event}')
@@ -31,8 +29,18 @@ def lambda_handler(event, context):
     data_struct.update(audit_token)
 
     data_struct = move_raw(copy_source, data_struct)
+    data_struct["bucket_raw"] = os.environ["BUCKET_RAW"]
+    data_struct["bucket_artifacts"] = os.environ["BUCKET_ARTIFACTS"]
+    data_struct["dlk_database_raw"] = os.environ["DLK_DATABASE_RAW"]
+    data_struct["dlk_database_analytics"] = os.environ["DLK_DATABASE_ANALYTIC"]
 
-    print(data_struct)
+    print("data_struct : ",data_struct)
+    
+    state_machine_arn = os.environ["STATE_MACHINE_ARN"]
+    
+    trigger_stepfunction(data_struct, state_machine_arn)
+    
+    print("")
 
     data_message = {
             'MessageBody': json.dumps(data_struct),
@@ -40,13 +48,20 @@ def lambda_handler(event, context):
              'MessageDeduplicationId': data_struct['process_code']
         }
 
-    url_queue_sandbox = os.environ["SQS_QUEUE_SANDBOX"]
-
-    print("sns data_message: ", data_message)
-    send_message_sqs(data_message, url_queue_sandbox)
-
-
     return response
+
+
+def trigger_stepfunction(data_message, state_machine_arn):
+    try:
+        print("Invoke execution step")
+        sf_manager = StepFunctionsManager(state_machine_arn)
+        prefix = "lambda-producer"
+        print("Start execution step")
+        sf_manager.execute_step_functions(data_message, prefix)
+    except Exception as e:
+        print('Exception ocurred: {}'.format(e))
+        raise e
+
 
 def move_raw(copy_source, data_struct):
 
@@ -62,31 +77,3 @@ def move_raw(copy_source, data_struct):
     s3.meta.client.copy(copy_source, bucket_move, key_move)
 
     return data_struct
-
-
-def trigger_stepfunction(data_message, state_machine_arn):
-    client = boto3.client('sf')
-    response = {}
-
-    try:
-        sf_manager = StepFunctionsManager(state_machine_arn)
-        can_trigger_step = can_submit_to_process(
-            sf_manager, body_content[process_type])
-
-    except Exception as e:
-        print('Exception ocurred: {}'.format(e))
-        raise e
-
-def send_message_sqs(data_message, url_queue):
-    client = boto3.client('sqs')
-    response = {}
-    try:
-        
-        resp = client.send_message(
-            QueueUrl = url_queue,
-            MessageBody = data_message['MessageBody'],
-            MessageGroupId = data_message['MessageGroupId'],
-            MessageDeduplicationId = data_message['MessageDeduplicationId']
-        )
-    except botocore.exceptions.ClientError as e:
-        print("Failed send the queue: " + str(e))

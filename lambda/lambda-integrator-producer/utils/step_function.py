@@ -11,11 +11,11 @@ class StepFunctionsManager:
 
     def execute_step_functions(self, message, prefix):
         try:
-            print('sf message uuid: {}'.format(message['uuid']))
+            print('sf message uuid: {}'.format(message['uuid_file']))
             response = self.client.start_execution(
                 stateMachineArn=self.state_mach_arn,
-                name='{}-{}'.format(prefix,str(message['uuid'])),
-                input=json.dumps(message)
+                name='{}-{}'.format(prefix,str(message['uuid_file'])),
+                input=  json.dumps({"data":json.dumps(message)})
             )
             return True
 
@@ -57,3 +57,4 @@ class StepFunctionsManager:
             print("Exception occurred while getting the execution ids of step functions: " + str(e))
 
         return total_running_executions_ids 
+        
