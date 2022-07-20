@@ -1,0 +1,24 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS Step Functions for the Orchestrator
+Parameters:
+  Grupo:
+      Type: String
+      Description: 'Grupo de proyecto'
+      Default: Auna
+Resources:
+  MyEventsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Events Rule 
+      EventPattern: 
+        detail-type: 
+          - "AWS API Call via CloudTrail"
+        detail: 
+          userIdentity: 
+            type: 
+              - "Root"    
+      ScheduleExpression: "cron(35 14 * * ? *)" 
+      State: ENABLED
+      Targets:
+        - Arn: arn:aws:sns:us-east-1:279224823134:sns-integrator-notify-alert
+          Id: snsintegrator

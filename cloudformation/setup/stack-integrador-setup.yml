@@ -26,19 +26,19 @@ Parameters:
   ProjectName:
     Type: String
     Description: Projects's name that will be used on Resources (lower case)
-    Default: auna
+    Default: chvasquez
   BucketLanding:
       Type: String
       Description: 'bucket landing'
-      Default: auna-lake-landing
+      Default: chvasquez-lake-landing
   BucketArtifacts:
       Type: String
       Description: 'bucket artifacts'
-      Default: auna-lake-artifacts
+      Default: chvasquez-lake-artifacts
   BucketRaw:
       Type: String
       Description: 'bucket raw'
-      Default: auna-lake-raw
+      Default: chvasquez-lake-raw
 Resources:
   IAMResource:
     Type: AWS::IAM::Role
@@ -70,12 +70,12 @@ Resources:
             - s3:GetBucketNotification
             - s3:PutBucketNotification
             Resource:
-            - !Sub arn:aws:s3:::${BucketLanding}
-            - !Sub arn:aws:s3:::${BucketLanding}/*
-            - !Sub arn:aws:s3:::${BucketArtifacts}
-            - !Sub arn:aws:s3:::${BucketArtifacts}/*
-            - !Sub arn:aws:s3:::${BucketRaw}
-            - !Sub arn:aws:s3:::${BucketRaw}/*
+            - !Sub arn:aws:s3:::${BucketLanding}-${AppEnv}
+            - !Sub arn:aws:s3:::${BucketLanding}-${AppEnv}/*
+            - !Sub arn:aws:s3:::${BucketArtifacts}-${AppEnv}
+            - !Sub arn:aws:s3:::${BucketArtifacts}-${AppEnv}/*
+            - !Sub arn:aws:s3:::${BucketRaw}-${AppEnv}
+            - !Sub arn:aws:s3:::${BucketRaw}-${AppEnv}/*
           - Effect: Allow
             Action:
             - logs:CreateLogStream
@@ -100,6 +100,18 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/lambda-integrator-producer-${AppEnv}
       RetentionInDays: 30
+    Tags:
+        - Key: Grupo
+          Value: !Ref Grupo
+  StateMachineLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: 'Delete'
+    Properties:
+      LogGroupName: !Sub /aws/states/sf-lake-integrador-${AppEnv}
+      RetentionInDays: 30
+    Tags:
+        - Key: Grupo
+          Value: !Ref Grupo
   TopicRes:
     Type: AWS::SNS::Topic
     Properties:
