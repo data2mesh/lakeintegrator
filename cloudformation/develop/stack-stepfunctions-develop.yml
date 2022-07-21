@@ -1,6 +1,10 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: AWS Step Functions for the Orchestrator
 Parameters:
+  Grupo:
+      Type: String
+      Description: 'Grupo de proyecto'
+      Default: Auna
   AppEnv:
     Default: dev
     Type: String
@@ -34,12 +38,6 @@ Parameters:
       Description: 'bucket raw'
       Default: auna-lake-raw
 Resources:
-  StateMachineLogGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: 'Delete'
-    Properties:
-      LogGroupName: !Sub /aws/states/sf-lake-integrador-${AppEnv}
-      RetentionInDays: 30
   StateMachineRes:
     Type: AWS::StepFunctions::StateMachine
     DeletionPolicy: 'Delete'
@@ -124,6 +122,3 @@ Resources:
             }
           }
         }
-Outputs:
-  CloudWatchLogsLogGroup:
-    Value: !GetAtt StateMachineLogGroup.Arn

@@ -84,6 +84,22 @@ Resources:
             - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/lambda-integrator-producer-${AppEnv}:*
             - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/states/sf-lake-integrador-${AppEnv}:*
           - Effect: Allow
+            Action:
+            - glue:StartCrawler
+            - glue:StartJobRun
+            - glue:StartWorkflowRun
+            - glue:GetJob
+            - glue:GetJobRun
+            - glue:GetTable
+            - glue:GetTables
+            - glue:GetDatabase
+            - glue:StopWorkflowRun
+            - glue:StopTrigger
+            - glue:GetDatabase           
+            Resource:
+            - !Sub arn:aws:glue:${AWS::Region}:${AWS::AccountId}:job/JobRawLake
+            - !Sub arn:aws:glue:${AWS::Region}:${AWS::AccountId}:job/JobLakeAnalytic
+          - Effect: Allow
             Action: states:*
             Resource:
               Fn::Sub: arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:sf-lake-integrador-${AppEnv}
@@ -100,18 +116,12 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/lambda-integrator-producer-${AppEnv}
       RetentionInDays: 30
-    Tags:
-        - Key: Grupo
-          Value: !Ref Grupo
   StateMachineLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: 'Delete'
     Properties:
       LogGroupName: !Sub /aws/states/sf-lake-integrador-${AppEnv}
       RetentionInDays: 30
-    Tags:
-        - Key: Grupo
-          Value: !Ref Grupo
   TopicRes:
     Type: AWS::SNS::Topic
     Properties:
